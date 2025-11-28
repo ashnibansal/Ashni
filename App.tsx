@@ -56,67 +56,134 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => (
   </div>
 );
 
-const DesignerList = ({ designers }: { designers: Designer[] }) => (
-  <div className="p-4 pb-32 space-y-8 bg-[#FDFCF8] min-h-screen">
-    <div className="flex justify-between items-end px-2 pt-4">
-      <div>
-        <h2 className="text-4xl font-bold text-stone-900 font-serif">Artisans</h2>
-        <p className="text-stone-400 text-xs font-bold tracking-widest uppercase mt-2">Curated list of masters</p>
-      </div>
-    </div>
-    
-    {designers.map((designer) => (
-      <div key={designer.id} className="bg-white rounded-3xl overflow-hidden shadow-xl shadow-stone-200/40 border border-stone-100 flex flex-col group transition-all duration-300 hover:shadow-2xl">
-        <div className="relative h-80 overflow-hidden">
-          <img 
-            src={designer.imageUrl} 
-            alt={designer.name} 
-            className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-110" 
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80"></div>
-          
-          <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 border border-white/20">
-              {designer.rating} <i className="fa-solid fa-star text-amber-500 text-[10px]"></i>
-          </div>
-          
-          <div className="absolute bottom-0 left-0 right-0 p-6 text-white translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-             <div className="flex items-center gap-2 text-amber-200 text-xs font-bold tracking-wider uppercase mb-1">
-                <i className="fa-solid fa-location-dot"></i>
-                {designer.location}
-            </div>
-             <h3 className="text-3xl font-serif font-bold mb-1">{designer.name}</h3>
-             <p className="text-stone-300 text-sm font-light line-clamp-2">{designer.description}</p>
+const DesignerList = ({ designers }: { designers: Designer[] }) => {
+  const [sortedDesigners, setSortedDesigners] = useState<Designer[]>(designers);
+  const [isLocating, setIsLocating] = useState(false);
+
+  // Haversine formula to calculate distance in km
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+
+  const handleNearMe = () => {
+    setIsLocating(true);
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+
+        const sorted = [...designers].map(d => {
+            if (!d.coordinates) return { ...d, distance: Infinity };
+            const dist = calculateDistance(latitude, longitude, d.coordinates.lat, d.coordinates.lng);
+            return { ...d, distance: dist };
+        }).sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+
+        setSortedDesigners(sorted);
+        setIsLocating(false);
+      },
+      (error) => {
+        console.error(error);
+        alert("Unable to retrieve your location. Please check your permissions.");
+        setIsLocating(false);
+      }
+    );
+  };
+
+  return (
+    <div className="p-4 pb-32 space-y-6 bg-[#FDFCF8] min-h-screen">
+      <div className="flex flex-col gap-4 pt-4">
+        <div className="flex justify-between items-end px-2">
+          <div>
+            <h2 className="text-4xl font-bold text-stone-900 font-serif">Artisans</h2>
+            <p className="text-stone-400 text-xs font-bold tracking-widest uppercase mt-2">Curated list of masters</p>
           </div>
         </div>
         
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <span className="text-[10px] font-bold tracking-widest text-stone-500 uppercase border border-stone-200 px-3 py-1 rounded-full">{designer.specialty}</span>
-            <span className="text-stone-900 font-bold font-serif text-lg">{designer.priceRange}</span>
+        <button 
+          onClick={handleNearMe}
+          disabled={isLocating}
+          className="self-start flex items-center gap-2 bg-white border border-stone-200 px-4 py-2.5 rounded-full shadow-sm text-xs font-bold uppercase tracking-widest text-stone-600 hover:bg-stone-50 hover:border-amber-500 hover:text-amber-600 transition-all active:scale-95"
+        >
+          {isLocating ? (
+             <><i className="fa-solid fa-spinner fa-spin"></i> Locating...</>
+          ) : (
+             <><i className="fa-solid fa-location-crosshairs text-amber-500"></i> Find Near Me</>
+          )}
+        </button>
+      </div>
+      
+      {sortedDesigners.map((designer) => (
+        <div key={designer.id} className="bg-white rounded-3xl overflow-hidden shadow-xl shadow-stone-200/40 border border-stone-100 flex flex-col group transition-all duration-300 hover:shadow-2xl">
+          <div className="relative h-80 overflow-hidden">
+            <img 
+              src={designer.imageUrl} 
+              alt={designer.name} 
+              className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-110" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80"></div>
+            
+            <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 border border-white/20">
+                {designer.rating} <i className="fa-solid fa-star text-amber-500 text-[10px]"></i>
+            </div>
+
+            {designer.distance !== undefined && designer.distance !== Infinity && (
+               <div className="absolute top-4 left-4 bg-stone-900/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-[10px] font-bold shadow-sm flex items-center gap-1.5 border border-white/10 uppercase tracking-wider">
+                  <i className="fa-solid fa-map-pin text-amber-400"></i> {Math.round(designer.distance)} km away
+               </div>
+            )}
+            
+            <div className="absolute bottom-0 left-0 right-0 p-6 text-white translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+               <div className="flex items-center gap-2 text-amber-200 text-xs font-bold tracking-wider uppercase mb-1">
+                  <i className="fa-solid fa-location-dot"></i>
+                  {designer.location}
+              </div>
+               <h3 className="text-3xl font-serif font-bold mb-1">{designer.name}</h3>
+               <p className="text-stone-300 text-sm font-light line-clamp-2">{designer.description}</p>
+            </div>
           </div>
           
-          <button 
-            onClick={() => {
-                const btn = document.getElementById(`book-btn-${designer.id}`);
-                if(btn) {
-                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Request Sent';
-                    btn.classList.add('bg-green-700', 'border-green-700');
-                    setTimeout(() => {
-                        btn.innerHTML = 'Book Consultation';
-                        btn.classList.remove('bg-green-700', 'border-green-700');
-                    }, 3000);
-                }
-            }}
-            id={`book-btn-${designer.id}`}
-            className="w-full bg-stone-900 text-white py-4 rounded-xl text-sm font-bold tracking-widest uppercase hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/20 active:scale-[0.98] border border-stone-900"
-          >
-              Book Consultation
-          </button>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[10px] font-bold tracking-widest text-stone-500 uppercase border border-stone-200 px-3 py-1 rounded-full">{designer.specialty}</span>
+              <span className="text-stone-900 font-bold font-serif text-lg">{designer.priceRange}</span>
+            </div>
+            
+            <button 
+              onClick={() => {
+                  const btn = document.getElementById(`book-btn-${designer.id}`);
+                  if(btn) {
+                      btn.innerHTML = '<i class="fa-solid fa-check"></i> Request Sent';
+                      btn.classList.add('bg-green-700', 'border-green-700');
+                      setTimeout(() => {
+                          btn.innerHTML = 'Book Consultation';
+                          btn.classList.remove('bg-green-700', 'border-green-700');
+                      }, 3000);
+                  }
+              }}
+              id={`book-btn-${designer.id}`}
+              className="w-full bg-stone-900 text-white py-4 rounded-xl text-sm font-bold tracking-widest uppercase hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/20 active:scale-[0.98] border border-stone-900"
+            >
+                Book Consultation
+            </button>
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
 
 const PlansPage = ({ onSelectPlan }: { onSelectPlan: (plan: string, price: string) => void }) => (
   <div className="p-4 pb-32 bg-[#FDFCF8] min-h-screen">

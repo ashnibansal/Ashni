@@ -3,6 +3,7 @@
   "description": "Connect with local jewelry designers and create dream pieces using AI. Analyze existing jewelry or generate new concepts based on your personality.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

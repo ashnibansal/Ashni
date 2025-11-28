@@ -13,6 +13,11 @@ export interface Designer {
   rating: number;
   imageUrl: string;
   description: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  distance?: number; // Distance in km from user
 }
 
 export interface DesignRequest {
