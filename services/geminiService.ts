@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Safely access process.env to prevent "process is not defined" errors in browser environments
+const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
+
+const ai = new GoogleGenAI({ apiKey });
 
 // Analyze an uploaded image of jewelry
 export const analyzeJewelryImage = async (base64Image: string): Promise<string> => {

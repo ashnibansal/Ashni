@@ -819,7 +819,7 @@ export default function App() {
   return (
     // App Container - Simulating a mobile app wrapper
     <div className="bg-[#E5E4E0] min-h-screen font-sans flex justify-center items-center py-0 sm:py-8">
-      <div className="w-full max-w-[420px] bg-[#FDFCF8] h-[100vh] sm:h-[850px] sm:rounded-[3rem] shadow-2xl shadow-stone-900/20 relative overflow-hidden flex flex-col border-0 sm:border-8 border-stone-900 ring-4 ring-stone-900/10">
+      <div className="w-full max-w-[420px] bg-[#FDFCF8] h-dvh sm:h-[850px] sm:rounded-[3rem] shadow-2xl shadow-stone-900/20 relative overflow-hidden flex flex-col border-0 sm:border-8 border-stone-900 ring-4 ring-stone-900/10">
         {/* Dynamic Island Notch Simulation (Desktop only) */}
         <div className="hidden sm:block absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-stone-900 rounded-b-2xl z-[60]"></div>
         
