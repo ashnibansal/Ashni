@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://chbyizexfgolrwmshxpb.supabase.co';
-// Note: This appears to be a publishable key. Ensure your Supabase RLS policies are configured correctly for public access if needed.
-const supabaseKey = 'sb_publishable_ilSrym7OxgJzL_kRB8qgvg_IkM9ks5Q';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoYnlpemV4ZmdvbHJ3bXNoeHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNDA3MzIsImV4cCI6MjA3OTgxNjczMn0.Ti_ecQeN-7Zw50HQLm95063b1azFwPrvi7UmokqM5fY';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);

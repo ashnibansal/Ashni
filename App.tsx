@@ -3,6 +3,7 @@ import { User, ViewState, DesignRequest, Designer } from './types';
 import { MOCK_DESIGNERS } from './constants';
 import { analyzeJewelryImage, generateJewelryDesign } from './services/geminiService';
 import { NavBar, BottomNav } from './components/NavBar';
+import { supabase } from './services/supabaseClient';
 
 // -- Page Components --
 
@@ -59,6 +60,11 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => (
 const DesignerList = ({ designers }: { designers: Designer[] }) => {
   const [sortedDesigners, setSortedDesigners] = useState<Designer[]>(designers);
   const [isLocating, setIsLocating] = useState(false);
+
+  // Update sorted designers when the designers prop changes
+  useEffect(() => {
+    setSortedDesigners(designers);
+  }, [designers]);
 
   // Haversine formula to calculate distance in km
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -125,7 +131,13 @@ const DesignerList = ({ designers }: { designers: Designer[] }) => {
         </button>
       </div>
       
-      {sortedDesigners.map((designer) => (
+      {sortedDesigners.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-stone-400">
+             <i className="fa-solid fa-spinner fa-spin text-2xl mb-4"></i>
+             <p className="text-sm">Loading Artisans...</p>
+          </div>
+      ) : (
+      sortedDesigners.map((designer) => (
         <div key={designer.id} className="bg-white rounded-3xl overflow-hidden shadow-xl shadow-stone-200/40 border border-stone-100 flex flex-col group transition-all duration-300 hover:shadow-2xl">
           <div className="relative h-80 overflow-hidden">
             <img 
@@ -180,7 +192,8 @@ const DesignerList = ({ designers }: { designers: Designer[] }) => {
             </button>
           </div>
         </div>
-      ))}
+      ))
+      )}
     </div>
   );
 };
@@ -353,31 +366,58 @@ const AuthForm = ({ type, onComplete, onSwitch }: { type: 'login' | 'register' |
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (type === 'forgot') {
-        if (!email) {
-            setError("Please enter your email");
-            return;
-        }
-        setResetSent(true);
-        return;
-    }
+    setError('');
+    setLoading(true);
 
-    if (!email || !password) {
-      setError("Please fill in all fields");
-      return;
+    try {
+      if (type === 'forgot') {
+          if (!email) throw new Error("Please enter your email");
+          const { error } = await supabase.auth.resetPasswordForEmail(email);
+          if (error) throw error;
+          setResetSent(true);
+      } else if (type === 'login') {
+          if (!email || !password) throw new Error("Please fill in all fields");
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          if (data.session?.user) {
+              const u: User = {
+                  id: data.session.user.id,
+                  email: data.session.user.email || '',
+                  name: data.session.user.user_metadata?.full_name || email.split('@')[0]
+              };
+              onComplete(u);
+          }
+      } else if (type === 'register') {
+          if (!email || !password || !name) throw new Error("Please fill in all fields");
+          const { data, error } = await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { full_name: name } }
+          });
+          if (error) throw error;
+          // Note: If email confirmation is enabled in Supabase, the user won't be logged in immediately.
+          // For now, assuming auto-confirm or handling session if present.
+          if (data.session?.user) {
+               const u: User = {
+                  id: data.session.user.id,
+                  email: data.session.user.email || '',
+                  name: name
+              };
+              onComplete(u);
+          } else if (data.user && !data.session) {
+              setError("Registration successful! Please check your email to confirm your account.");
+          }
+      }
+    } catch (err: any) {
+        setError(err.message || "An error occurred");
+    } finally {
+        setLoading(false);
     }
-    // Simulate Auth
-    const user: User = {
-      id: Date.now().toString(),
-      name: name || email.split('@')[0],
-      email: email
-    };
-    localStorage.setItem('aurai_user', JSON.stringify(user));
-    onComplete(user);
   };
 
   if (type === 'forgot') {
@@ -407,9 +447,10 @@ const AuthForm = ({ type, onComplete, onSwitch }: { type: 'login' | 'register' |
                         </div>
                         <button
                             type="submit"
-                            className="w-full py-4 px-4 bg-stone-900 text-white font-bold rounded-xl shadow-lg shadow-stone-900/20 hover:bg-stone-800 transition-all transform active:scale-[0.98] hover:-translate-y-0.5 mt-2"
+                            disabled={loading}
+                            className="w-full py-4 px-4 bg-stone-900 text-white font-bold rounded-xl shadow-lg shadow-stone-900/20 hover:bg-stone-800 transition-all transform active:scale-[0.98] hover:-translate-y-0.5 mt-2 disabled:opacity-50"
                         >
-                            Send Reset Link
+                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : "Send Reset Link"}
                         </button>
                     </form>
                 ) : (
@@ -493,9 +534,10 @@ const AuthForm = ({ type, onComplete, onSwitch }: { type: 'login' | 'register' |
 
           <button
             type="submit"
-            className="w-full py-4 px-4 bg-stone-900 text-white font-bold rounded-xl shadow-lg shadow-stone-900/20 hover:bg-stone-800 transition-all transform active:scale-[0.98] hover:-translate-y-0.5 mt-6 tracking-wide"
+            disabled={loading}
+            className="w-full py-4 px-4 bg-stone-900 text-white font-bold rounded-xl shadow-lg shadow-stone-900/20 hover:bg-stone-800 transition-all transform active:scale-[0.98] hover:-translate-y-0.5 mt-6 tracking-wide disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {type === 'login' ? 'Sign In' : 'Create Account'}
+            {loading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : (type === 'login' ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 
@@ -515,9 +557,10 @@ const AuthForm = ({ type, onComplete, onSwitch }: { type: 'login' | 'register' |
   );
 };
 
-const AITool = ({ onSave }: { onSave: (design: DesignRequest) => void }) => {
+const AITool = ({ onSave }: { onSave: (design: DesignRequest) => Promise<void> }) => {
   const [activeTab, setActiveTab] = useState<'analyze' | 'generate'>('generate');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -565,10 +608,11 @@ const AITool = ({ onSave }: { onSave: (design: DesignRequest) => void }) => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!result) return;
+    setSaving(true);
     const newDesign: DesignRequest = {
-      id: Date.now().toString(),
+      id: Date.now().toString(), // Temporary ID, DB will generate real one
       type: activeTab === 'analyze' ? 'analysis' : 'generation',
       title: activeTab === 'analyze' ? 'Jewelry Analysis' : 'Custom AI Design',
       description: activeTab === 'analyze' ? 'Image Analysis' : prompt,
@@ -576,8 +620,16 @@ const AITool = ({ onSave }: { onSave: (design: DesignRequest) => void }) => {
       imageUrl: activeTab === 'analyze' ? (preview || undefined) : resultImage,
       createdAt: Date.now()
     };
-    onSave(newDesign);
-    alert("Saved to Profile!");
+    
+    try {
+        await onSave(newDesign);
+        alert("Saved to Profile!");
+    } catch (error) {
+        console.error(error);
+        alert("Failed to save.");
+    } finally {
+        setSaving(false);
+    }
   };
 
   return (
@@ -652,8 +704,8 @@ const AITool = ({ onSave }: { onSave: (design: DesignRequest) => void }) => {
               <div className="bg-stone-50 p-6 rounded-2xl border border-stone-100">
                 {resultImage && <div className="rounded-xl overflow-hidden shadow-md mb-6"><img src={resultImage} className="w-full object-cover" /></div>}
                 <div className="whitespace-pre-wrap text-sm text-stone-600 leading-loose font-light">{result}</div>
-                <button onClick={handleSave} className="mt-6 w-full py-4 border border-stone-200 text-stone-600 font-bold rounded-xl hover:bg-stone-900 hover:text-white hover:border-stone-900 transition-all">
-                  <i className="fa-regular fa-bookmark mr-2"></i> Save to Profile
+                <button onClick={handleSave} disabled={saving} className="mt-6 w-full py-4 border border-stone-200 text-stone-600 font-bold rounded-xl hover:bg-stone-900 hover:text-white hover:border-stone-900 transition-all">
+                  {saving ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <><i className="fa-regular fa-bookmark mr-2"></i> Save to Profile</>}
                 </button>
               </div>
             </div>
@@ -733,43 +785,140 @@ const ProfilePage = ({ savedDesigns, onDelete, user, onLogout }: { savedDesigns:
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LANDING);
   const [user, setUser] = useState<User | null>(null);
+  const [designers, setDesigners] = useState<Designer[]>([]);
   const [savedDesigns, setSavedDesigns] = useState<DesignRequest[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<{name: string, price: string} | null>(null);
 
-  // Load initial state
+  // Initialize Auth State and Data
   useEffect(() => {
-    const storedUser = localStorage.getItem('aurai_user');
-    if (storedUser) {
-        setUser(JSON.parse(storedUser));
-    }
+    // Check for active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+            setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+            });
+            setCurrentView(ViewState.HOME);
+        }
+    });
 
-    const storedDesigns = localStorage.getItem('aurai_designs');
-    if (storedDesigns) setSavedDesigns(JSON.parse(storedDesigns));
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+            setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+            });
+        } else {
+            setUser(null);
+            setCurrentView(ViewState.LANDING);
+        }
+    });
+
+    // Fetch Designers
+    const fetchDesigners = async () => {
+        const { data, error } = await supabase.from('designers').select('*');
+        if (!error && data && data.length > 0) {
+            // Map DB snake_case to TS camelCase
+            const mapped: Designer[] = data.map(d => ({
+                id: d.id,
+                name: d.name,
+                location: d.location,
+                specialty: d.specialty,
+                priceRange: d.price_range,
+                rating: Number(d.rating),
+                imageUrl: d.image_url,
+                description: d.description,
+                coordinates: (d.lat && d.lng) ? { lat: d.lat, lng: d.lng } : undefined
+            }));
+            setDesigners(mapped);
+        } else {
+             // Fallback to mock data if DB is empty or error
+             console.log("Using mock designers");
+             setDesigners(MOCK_DESIGNERS);
+        }
+    };
+
+    fetchDesigners();
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Save designs when changed
+  // Fetch saved designs when user is logged in
   useEffect(() => {
-    localStorage.setItem('aurai_designs', JSON.stringify(savedDesigns));
-  }, [savedDesigns]);
+      if (user) {
+          const fetchDesigns = async () => {
+              const { data, error } = await supabase
+                .from('saved_designs')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+              
+              if (!error && data) {
+                  const mapped: DesignRequest[] = data.map(d => ({
+                      id: d.id,
+                      title: d.title,
+                      type: d.type as 'analysis' | 'generation',
+                      description: d.description,
+                      aiResponse: d.ai_response,
+                      imageUrl: d.image_url,
+                      createdAt: new Date(d.created_at).getTime()
+                  }));
+                  setSavedDesigns(mapped);
+              }
+          };
+          fetchDesigns();
+      } else {
+          setSavedDesigns([]);
+      }
+  }, [user]);
 
   const handleAuthComplete = (newUser: User) => {
     setUser(newUser);
     setCurrentView(ViewState.HOME);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('aurai_user');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setCurrentView(ViewState.LANDING);
   };
 
-  const saveDesign = (design: DesignRequest) => {
+  const saveDesign = async (design: DesignRequest) => {
+    if (!user) return;
+    
+    // Optimistic update
     setSavedDesigns([design, ...savedDesigns]);
+
+    const { error } = await supabase.from('saved_designs').insert({
+        user_id: user.id,
+        title: design.title,
+        type: design.type,
+        description: design.description,
+        ai_response: design.aiResponse,
+        image_url: design.imageUrl
+    });
+
+    if (error) {
+        console.error("Error saving design", error);
+        alert("There was an error saving your design to the cloud.");
+        // Revert optimistic update (simplified)
+        // In a real app we'd fetch fresh data
+    }
   };
 
-  const deleteDesign = (id: string) => {
+  const deleteDesign = async (id: string) => {
     if (confirm("Delete this design?")) {
+      // Optimistic update
       setSavedDesigns(savedDesigns.filter(d => d.id !== id));
+      
+      const { error } = await supabase.from('saved_designs').delete().eq('id', id);
+      if (error) {
+          console.error("Error deleting", error);
+          alert("Failed to delete.");
+      }
     }
   };
 
@@ -795,7 +944,8 @@ export default function App() {
       case ViewState.FORGOT_PASSWORD:
         return <AuthForm type="forgot" onComplete={handleAuthComplete} onSwitch={(view) => setCurrentView(view)} />;
       case ViewState.HOME:
-        return <DesignerList designers={MOCK_DESIGNERS} />;
+        // Pass the dynamically fetched designers (or mock fallback)
+        return <DesignerList designers={designers} />;
       case ViewState.AI_TOOL:
         return <AITool onSave={saveDesign} />;
       case ViewState.PLANS:
